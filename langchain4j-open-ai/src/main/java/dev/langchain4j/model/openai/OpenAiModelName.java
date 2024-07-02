@@ -46,4 +46,9 @@ public class OpenAiModelName {
     // Use with OpenAiImageModel
     public static final String DALL_E_2 = "dall-e-2"; // anyone still needs that? :)
     public static final String DALL_E_3 = "dall-e-3";
+
+    // Use with OpenAIAudioModel
+    public static final String WHISPER_1 = "whisper-1";
+    public static final String WHISPER_2 = "whisper-2";
+    public static final String TEXT_TO_SPEECH_1 = "tts-1";
 }
