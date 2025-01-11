@@ -126,11 +126,15 @@
         <module>langchain4j-agentic-a2a</module>
         <module>langchain4j-agentic-patterns</module>
 
+        <!-- observability -->
+        <module>langchain4j-micrometer</module>
+
         <!-- integration tests -->
         <module>integration-tests</module>
 
         <!-- internal -->
         <module>internal/langchain4j-docu-chatbot-updater</module>
+
     </modules>
 
     <properties>
