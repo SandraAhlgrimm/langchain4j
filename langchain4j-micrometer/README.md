@@ -2,12 +2,12 @@
 The `langchain4j-micrometer` module provides a Micrometer-based metrics implementation for the `langchain4j` library. For now, it only provides metrics for a chat model interaction.
 It uses the Micrometer Observation API in a `ChatModelListener` to collect metrics about the usage of a chat model. The naming of the metrics is based on the [OpenTelemetry Semantic Conventions for Generative AI Metrics](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-metrics/). 
 
+> **Note**: The OpenTelemetry AI Semantic Conventions are not stable yet and may have breaking changes in future versions.
+
 The following metrics are collected:
 
-- `langchain4j.chat.model.request` - The number of requests made to the chat model. Not part of the OpenTelemetry Semantic Conventions.
-- `langchain4j.chat.model.error` - The number of errors that occurred during the chat model interaction. Not part of the OpenTelemetry Semantic Conventions.
-- `gen_ai.client.operation.duration` - The duration of the GenAI operation.
-- `gen_ai.client.token.usage` - The number of tokens used by the model for input, output, or both.
+- `gen_ai.client.operation.duration` - The duration of the GenAI operation, with an `outcome` tag (SUCCESS/ERROR) to distinguish successful and failed requests.
+- `gen_ai.client.token.usage` - The number of tokens used by the model for input or output.
 
 ## Usage
 The micrometer module is added to the project from version 1.0.0-alpha2.
@@ -58,8 +58,9 @@ management:
 ```
 
 ### Add observability to your ChatModel
-The `MicrometerChatModelListener` collects the metrics for the chat model. It uses a `ObservationRegistry` and `MeterRegistry` provided by Micrometer to collect the metrics in an Observation.
-Therefore, you need to create a `MicrometerChatModelListener` with the available `ObservationRegistry` and `MeterRegistry`.
+The `MicrometerChatModelListener` collects the metrics for the chat model. It uses an `ObservationRegistry` provided by Micrometer to collect the metrics in an Observation.
+
+**Important**: The `ChatModelMeterObservationHandler` must be registered with the `ObservationRegistry` separately. In a Spring Boot application, this is typically done via auto-configuration in a `langchain4j-micrometer-spring-boot-starter` module.
 
 Then, add the `MicrometerChatModelListener` to a list of listeners for your ChatModel.
 Finally, add this list of listeners to the chat model in its builder.
@@ -67,11 +68,18 @@ Finally, add this list of listeners to the chat model in its builder.
 ```java
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.observation.ObservationRegistry;
+import dev.langchain4j.micrometer.listeners.MicrometerChatModelListener;
+import dev.langchain4j.micrometer.observation.ChatModelMeterObservationHandler;
 
 List<ChatModelListener> list;
 
-public ChatApp(MeterRegistry meterRegistry, ObservationRegistry observationRegistry) {
-        this.list = List.of(new MicrometerChatModelListener(meterRegistry, observationRegistry, "azure_openai"));
+public ChatApp(ObservationRegistry observationRegistry, MeterRegistry meterRegistry) {
+        // Register the handler once (typically done in auto-configuration)
+        observationRegistry.observationConfig()
+            .observationHandler(new ChatModelMeterObservationHandler(meterRegistry));
+        
+        // Create the listener
+        this.list = List.of(new MicrometerChatModelListener(observationRegistry, "azure_openai"));
     }
     
 // For example an AzureOpenAiChatModel
@@ -86,17 +94,16 @@ public AzureOpenAiChatModel createChatModel() {
 ## Viewing the metrics
 You can view the metrics by visiting the `/actuator/metrics` endpoint of your application. For example, if you are running your application on `localhost:8080`, you can visit `http://localhost:8080/actuator/metrics` to view the metrics.
 
-- `langchain4j.chat.model.request`: `/actuator/metrics/langchain4j.chat.model.request`
-- `langchain4j.chat.model.error`: `/actuator/metrics/langchain4j.chat.model.error`
 - `gen_ai.client.operation.duration`: `/actuator/metrics/gen_ai.client.operation.duration`
+  - Use `?tag=outcome:SUCCESS` or `?tag=outcome:ERROR` to filter by outcome
 - `gen_ai.client.token.usage`: `/actuator/metrics/gen_ai.client.token.usage`
 
 The measurement of tokens for the `gen_ai.client.token.usage` metric is based on the `gen_ai.token.type` tag. The tag can have the following values:
 - `output`: The number of tokens used for the output.
 - `input`: The number of tokens used for the input.
 
-For each tag (output, input or total), you can view the metrics by visiting the following endpoints:
+For each tag (output or input), you can view the metrics by visiting the following endpoints:
 - `output`: `/actuator/metrics/gen_ai.client.token.usage?tag=gen_ai.token.type:output`
 - `input`: `/actuator/metrics/gen_ai.client.token.usage?tag=gen_ai.token.type:input`
 
-**Note**, the endpoint for the `gen_ai.client.token.usage` metric, without any tags, shows the sum of the values of both the output and the input tags. Subsequently, this value is the total amount of tokens used by the model. 
+**Note**: The endpoint for the `gen_ai.client.token.usage` metric, without any tags, shows the sum of the values of both the output and the input tags. Subsequently, this value is the total amount of tokens used by the model. 
