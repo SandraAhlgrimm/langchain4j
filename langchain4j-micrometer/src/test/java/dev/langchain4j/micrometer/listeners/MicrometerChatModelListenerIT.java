@@ -47,7 +47,8 @@ class MicrometerChatModelListenerIT {
                 .hasLowCardinalityKeyValue(KeyValue.of(OTelGenAiAttributes.OPERATION_NAME.value(), "chat"))
                 .hasLowCardinalityKeyValue(KeyValue.of(OTelGenAiAttributes.SYSTEM.value(), "azure_openai"))
                 .hasLowCardinalityKeyValue(KeyValue.of(OTelGenAiAttributes.REQUEST_MODEL.value(), "gpt-4o"))
-                .hasLowCardinalityKeyValue(KeyValue.of(OTelGenAiAttributes.RESPONSE_MODEL.value(), "gpt-4o"))
+                // Response model includes version suffix (e.g., gpt-4o-2024-11-20)
+                .hasLowCardinalityKeyValueWithKey(OTelGenAiAttributes.RESPONSE_MODEL.value())
                 .hasLowCardinalityKeyValue(KeyValue.of("outcome", "SUCCESS"));
     }
 
