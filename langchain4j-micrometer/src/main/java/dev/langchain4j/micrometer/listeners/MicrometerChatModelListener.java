@@ -1,5 +1,6 @@
 package dev.langchain4j.micrometer.listeners;
 
+import static dev.langchain4j.internal.ValidationUtils.ensureNotBlank;
 import static dev.langchain4j.internal.ValidationUtils.ensureNotNull;
 
 import dev.langchain4j.Experimental;
@@ -48,7 +49,7 @@ public class MicrometerChatModelListener implements ChatModelListener {
      */
     public MicrometerChatModelListener(ObservationRegistry observationRegistry, String aiSystemName) {
         this.observationRegistry = ensureNotNull(observationRegistry, "observationRegistry");
-        this.aiSystemName = ensureNotNull(aiSystemName, "aiSystemName");
+        this.aiSystemName = ensureNotBlank(aiSystemName, "aiSystemName");
     }
 
     @Override
