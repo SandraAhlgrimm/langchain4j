@@ -4,8 +4,6 @@ import dev.langchain4j.micrometer.conventions.OTelGenAiAttributes;
 import dev.langchain4j.micrometer.conventions.OTelGenAiMetricName;
 import dev.langchain4j.micrometer.conventions.OTelGenAiOperationName;
 import dev.langchain4j.micrometer.conventions.OTelGenAiTokenType;
-import dev.langchain4j.model.chat.listener.ChatModelErrorContext;
-import dev.langchain4j.model.chat.listener.ChatModelRequestContext;
 import dev.langchain4j.model.chat.listener.ChatModelResponseContext;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -13,12 +11,23 @@ import io.micrometer.observation.Observation;
 import io.micrometer.observation.ObservationHandler;
 import java.util.Map;
 
+/**
+ * An {@link ObservationHandler} that records token usage metrics for chat model interactions.
+ * <p>
+ * This handler records the following metrics:
+ * <ul>
+ *   <li>{@code gen_ai.client.token.usage} - The number of tokens used, tagged by token type (input/output)</li>
+ * </ul>
+ * <p>
+ * Request/error counting and duration metrics are handled by the default Micrometer
+ * observation handlers via the {@code outcome} tag on the observation.
+ * <p>
+ * This handler should be registered with the {@link io.micrometer.observation.ObservationRegistry}
+ * once (e.g., via Spring Boot auto-configuration).
+ */
 public class ChatModelMeterObservationHandler implements ObservationHandler<ChatModelObservationContext> {
 
     private final MeterRegistry meterRegistry;
-
-    private static final String LC_REQUEST_COUNTER = "langchain4j.chat.model.request";
-    private static final String LC_ERROR_COUNTER = "langchain4j.chat.model.error";
 
     public ChatModelMeterObservationHandler(MeterRegistry meterRegistry) {
         this.meterRegistry = meterRegistry;
@@ -26,17 +35,17 @@ public class ChatModelMeterObservationHandler implements ObservationHandler<Chat
 
     @Override
     public void onStart(ChatModelObservationContext context) {
-        addRequestMetrics(context.getRequestContext());
+        // No action needed - observation API handles timing automatically
     }
 
     @Override
     public void onError(ChatModelObservationContext context) {
-        addErrorMetric(context.getErrorContext());
+        // No action needed - observation API handles error counting via outcome tag
     }
 
     @Override
     public void onStop(ChatModelObservationContext context) {
-        addResponseMetrics(context.getResponseContext());
+        addTokenUsageMetrics(context);
     }
 
     @Override
@@ -44,47 +53,20 @@ public class ChatModelMeterObservationHandler implements ObservationHandler<Chat
         return context instanceof ChatModelObservationContext;
     }
 
-    private void addRequestMetrics(ChatModelRequestContext requestContext) {
-        Counter.builder(LC_REQUEST_COUNTER)
-                .tag(OTelGenAiAttributes.OPERATION_NAME.value(), OTelGenAiOperationName.CHAT.value())
-                .tag(OTelGenAiAttributes.SYSTEM.value(), getSystemValue(requestContext.attributes()))
-                .tag(
-                        OTelGenAiAttributes.REQUEST_MODEL.value(),
-                        requestContext.chatRequest().parameters().modelName())
-                .description("The number of requests that were made to the chat model")
-                .register(meterRegistry)
-                .increment();
-    }
-
-    private void addErrorMetric(ChatModelErrorContext errorContext) {
-        Counter.builder(LC_ERROR_COUNTER)
-                .tag(OTelGenAiAttributes.OPERATION_NAME.value(), OTelGenAiOperationName.CHAT.value())
-                .tag(OTelGenAiAttributes.SYSTEM.value(), getSystemValue(errorContext.attributes()))
-                .tag(
-                        OTelGenAiAttributes.REQUEST_MODEL.value(),
-                        errorContext.chatRequest().parameters().modelName())
-                .description("The number of errors that occurred in the chat model")
-                .register(meterRegistry)
-                .increment();
-    }
-
-    private void addResponseMetrics(ChatModelResponseContext responseContext) {
-        if (responseContext.chatResponse().tokenUsage() != null) {
-            addTokenUsageMetrics(responseContext);
+    private void addTokenUsageMetrics(ChatModelObservationContext context) {
+        ChatModelResponseContext responseContext = context.getResponseContext();
+        if (responseContext != null && responseContext.chatResponse().tokenUsage() != null) {
+            addTokenMetric(
+                    responseContext,
+                    OTelGenAiTokenType.INPUT,
+                    responseContext.chatResponse().tokenUsage().inputTokenCount(),
+                    "Measures the number of input tokens used");
+            addTokenMetric(
+                    responseContext,
+                    OTelGenAiTokenType.OUTPUT,
+                    responseContext.chatResponse().tokenUsage().outputTokenCount(),
+                    "Measures the number of output tokens used");
         }
-    }
-
-    private void addTokenUsageMetrics(ChatModelResponseContext responseContext) {
-        addTokenMetric(
-                responseContext,
-                OTelGenAiTokenType.INPUT,
-                responseContext.chatResponse().tokenUsage().inputTokenCount(),
-                "Measures the number of input tokens used");
-        addTokenMetric(
-                responseContext,
-                OTelGenAiTokenType.OUTPUT,
-                responseContext.chatResponse().tokenUsage().outputTokenCount(),
-                "Measures the number of output tokens used");
     }
 
     private void addTokenMetric(
